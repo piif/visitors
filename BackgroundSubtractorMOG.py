@@ -1,50 +1,88 @@
+# first tries, with BackgroundSubtractorMOG method to extract background
+
+# Usage : shapesVideo inputVideoFile [ outputFile ]
+# during replay :
+#  hit 'q' to exit
+#  hit 's' to save current frame with annotations
+#  hit 'i' to get info on pathes
+#  hit 'm' to get info on moments
+ 
 import numpy as np
 import cv2
 from sys import argv
 from time import sleep
 
 inputFile = argv[1]
+
+scale = 0.5
+
+# raw capture
 cap = cv2.VideoCapture(inputFile)
-ret, frame = cap.read()
+
+# read first frame
+ret, firstFrame = cap.read()
+
 # TODO : why 0 0 0 ??????
-w = cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
-h = cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
+w = firstFrame.shape[0]
+#cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)
+h = firstFrame.shape[1]
+#cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)
 fps = cap.get(cv2.cv.CV_CAP_PROP_FPS)
-print "video {}x{} @ {}".format(w, h, fps)
+fcc = cap.get(cv2.cv.CV_CAP_PROP_FOURCC)
+print "video {} {}x{} @ {}".format(fcc, w, h, fps)
+
+firstFrame = cv2.resize(firstFrame, (0,0), fx=scale, fy=scale)
 
 if len(argv) > 2:
     outputFile = argv[2]
     out = cv2.VideoWriter(
             outputFile,
-            cap.get(cv2.cv.CV_CAP_PROP_FOURCC),
-            cap.get(cv2.cv.CV_CAP_PROP_FPS),
-            (int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT))))
+            cv2.cv.CV_FOURCC(*'XVID'), ##cap.get(cv2.cv.CV_CAP_PROP_FOURCC),
+            25, #cap.get(cv2.cv.CV_CAP_PROP_FPS),
+            (640, 400) #(int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT)))
+    )
 else:
     outputFile = False
 
 fgbg = cv2.BackgroundSubtractorMOG()
-kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(15,15)) #np.ones((5,5),np.uint8)
+fgmask = fgbg.apply(firstFrame)
+
+# approximation level of contour recognition
+kSize = 15
+
+kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (kSize, kSize)) #np.ones((5,5),np.uint8)
 
 maxContours = 0
 biggestContour = 0
 frameNumber = 0
 
-followers = []
-# line = polyline coordinates showing this follower trace
+# list of dictionaries, where each entry has folling keys :
+# line = polyline coordinates showing this follower path
 # x, y : last seen position (=line[-1])
 # f : last seen frame number
 # x0, y0 : first seen coordinates (=line[0])
+followers = []
 
+# if distance between a point and last position in a path is lower,
+# consider it as path element 
 threshold = 50
+# if distance is lower, don't add the point to the path, to avoid huge polylines
+subThreshold = 5
+
+# every "refresh" frames, clean pathes which didn't changed since previous one
+refreshPathRate = 100 # 4 seconds
 
 def searchFollower(frameNumber, x, y):
+    global followers
     for f in followers:
         if abs(f['x'] - x) < threshold and abs(f['y'] - y) < threshold:
             f['f'] = frameNumber
-            f['line'].append([x,y])
             f['x'] = x
             f['y'] = y
+            if abs(f['x'] - x) < subThreshold and abs(f['y'] - y) < subThreshold:
+                f['line'].append([x,y])
             return
+
     #not found -> create new one
     followers.append({
         'f'  : frameNumber,
@@ -54,14 +92,29 @@ def searchFollower(frameNumber, x, y):
         'y'  : y,
         'line': [[x, y]]
     })
-    
+
+
+def refreshPath():
+    global followers, frameNumber, refreshPathRate
+
+    ttl = frameNumber - refreshPathRate / 2
+    print "refreshPath", ttl, "on", len(followers), "elements"
+    followers = [ x for x in followers if not x['f'] < ttl ]
+    print "=>", len(followers)
+
+
 while(True):
     # Capture frame-by-frame
     ret, frame = cap.read()
+    frame = cv2.resize(frame, (0,0), fx=scale, fy=scale)
+
     frameNumber += 1
 
     if not ret:
         break
+
+    if (frameNumber % refreshPathRate) == 0:
+        refreshPath()
 
     k = cv2.waitKey(1) & 0xFF;
     if k == ord('q'):
@@ -72,14 +125,21 @@ while(True):
     
     # get "movement part" of image
     fgmask = fgbg.apply(frame)
+    cv2.imshow('fgmask', fgmask)
+    ###gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
 
     # (try to) remove artefacts
     erosion = cv2.erode(fgmask,kernel,iterations = 1)
-    img = cv2.dilate(erosion,kernel,iterations = 1)
+    #cv2.imshow('erosion', erosion)
+    ###erosion = cv2.erode(gray, kernel, iterations = 1)
+    img = cv2.dilate(erosion, kernel, iterations = 1)
+
     cv2.imshow('img',img)
 
     # find contours Into it
-    contours,h = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    #contours,h = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours,h = cv2.findContours(img, cv2.RETR_TREE, cv2.CHAIN_APPROX_TC89_L1)
 
     # statistics about number of contours + max number of segments in them
     if len(contours) > maxContours:
@@ -91,7 +151,7 @@ while(True):
 #    cv2.drawContours(frame, contours, -1, (255, 0, 0), 1)
     for i,cnt in enumerate(contours):
         area = cv2.contourArea(cnt)
-        if area > 1000:
+        if area > 100:
             perim = cv2.arcLength(cnt, True)
             M = cv2.moments(cnt)
             cx = int(M['m10']/M['m00'])
@@ -138,6 +198,10 @@ while(True):
     cv2.imshow('shapes',frame)
     if outputFile != False:
         out.write(frame)
+
+    if k == ord('s'):
+        cv2.imwrite("{}_{}.out.png".format(argv[1], frameNumber), frame)
+        print "saved frame", frameNumber
 
     if len(followers) > 0:
         sleep(0.1)
