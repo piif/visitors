@@ -1,0 +1,8 @@
+tester un comptage "un par un" sur portique 4 :
+- énumérer les cas d'entrée/sortie de seuil sur les 2 lignes
+- le cas de Thomas qui entre alors que Jérôme n'est pas encore sorti puis qui fait demi-tour devrait être calculable
+
+Il faut détected l'entrée et la sortie de la zone de masure, et voir par quel bord on entre/quitte
+ pour différencier entrée, sortie et demi-tour
+Mais le cas Jérôme/Thomas est interessant à analyser
+Il faut peut être tracer un graphe du taux de remplissage des 2 lignes, et la progression de ce remplissage (dérivée ?)
