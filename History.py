@@ -29,6 +29,14 @@ class History:
         if _first is not None:
             self.buffer.append(_first)
 
+    def pop(self):
+        if len(self.buffer) == 0:
+            return None
+        if self.removeCallback is not None:
+            self.removeCallback(self.iter0, self.buffer[0])
+        self.iter0 += 1
+        return self.buffer.pop(0)
+
     def forward(self):
         if self.bufferPos >= 0 and self.bufferPos < len(self.buffer) - 1:
             self.bufferPos += 1
@@ -41,10 +49,7 @@ class History:
             self.buffer.append(nextOne)
             
             if len(self.buffer) > self.bufferMax:
-                if self.removeCallback is not None:
-                    self.removeCallback(self.iter0, self.buffer[0])
-                del self.buffer[0]
-                self.iter0 += 1
+                self.pop()
             else:
                self. bufferPos += 1
 

@@ -1,6 +1,11 @@
 pre-Processing tools
 =====
 
+VideoReader
+-----
+Simple class to read a capture, play/pause/backward some frames
+This class can be used as main template for other programs 
+
 sampleCapture
 -----
 **TODO**
