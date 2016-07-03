@@ -1,12 +1,27 @@
 #TODO 
-#- deqgager les 200 premiere frames de 14_3, ou trouver comment skip des frames sans y passer du temps
+#- degager les 200 premiere frames de 14_3, ou trouver comment skip des frames sans y passer du temps
+
+#python lineFilter.py -i samples/portique_4.mp4 --green 521 195 521 270 --red 554 192 554 272
+# = simple case, no encounter nor glued people possible
+
 #python lineFilter.py -i samples/raw/WP_20160319_005.stab.avi --green 330 109) 361 472 --red 489 112 498 468
+# = side view, vertical lines
+
 #python lineFilter.py -i samples/ldn1_14_3.avi --green 80 540 680 545 --red 80 500 680 500 -s 200
+# = top view, horizontal lines
 
 """
+- roll video from keyboard :
+  - go 1 frame forward with right arrow
+  - backward (limited to 10 frames) with left arrow
+  - get frame number with 'i'
+  - play/pause with 'p' or 's'
+  - quit with 'q'
+  
 - let user draw lines in video window :
   left click , drag , release => draw green line
   right click , drag , release => draw red line
+
 - look at changes over these lines to detect movement from green to red, which
   is outgoing movement / from red to green which is ingoing movement
   
@@ -187,7 +202,8 @@ while(True):
       a creuser sur des exemples ...
     """
 
-    gate.intersect(buffer[bufferPos], colorThreshold)
+    greenRate, redRate = gate.intersect(buffer[bufferPos], colorThreshold)
+    print "=", frameNumber, greenRate, redRate
 
     # Display the resulting frame
     redraw()

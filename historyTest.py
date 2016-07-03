@@ -8,7 +8,7 @@ def refreshPath():
     global followers, frameNumber, refreshPathRate
     ttl = frameNumber - refreshPathRate / 2
     print "refreshPath", ttl, "on", len(followers), "elements"
-    followers = [ x for x in followers if not f['f'] < ttl ]
+    followers = [ f for f in followers if not f['f'] < ttl ]
     print "=>", len(followers)
 
 for frameNumber in range(20):

@@ -1,3 +1,5 @@
+# a small toolbox to handle "gateway lines" in images
+
 from numpy import array, int16
 import cv2
 
@@ -76,11 +78,13 @@ class Line:
         self.segments = []
         if self.bgPixels is None:
             self.computeBgPixels()
+        over = 0
         for i, (x, y) in enumerate(self.getPixels()):
             fg = frame[y][x]
             delta = max(abs(self.bgPixels[i] - array(fg, dtype=int16)))
             #print x, "x", y, " : ", fg, "/", self.bgPixels[i], "->", delta
             if delta > colorThreshold:
+                over += 1
                 if start is None:
                     start = (x, y)
                 else:
@@ -92,7 +96,8 @@ class Line:
         # close last segment if any
         if start is not None:
             self.segments.append((start, (self.x1, self.y1)))
-        return self.segments
+
+        return over * 100.0 / (i+1)
 
 
     def __str__(self):
@@ -113,17 +118,17 @@ class CountingGate:
     def __init__(self, _green, _red):
         self.green = Line("green", _green)
         self.red = Line("red", _red)
-        width = max(len(self.red), len(self.green))
+        self.width = max(len(self.red), len(self.green))
 
 
     def setRed(self, _red):
         self.red = -red
-        width = max(len(self.red), len(self.green))
+        self.width = max(len(self.red), len(self.green))
 
 
     def setGreen(self, _green):
         self.green = _green
-        width = max(len(self.red), len(self.green))
+        self.width = max(len(self.red), len(self.green))
 
 
     def setBackground(self, frame):
@@ -131,12 +136,11 @@ class CountingGate:
         self.red.setBackground(frame)
 
     def intersect(self, frame, colorThreshold):
-        self.green.intersect(frame, colorThreshold)
-        self.red.intersect(frame, colorThreshold)
+        return self.green.intersect(frame, colorThreshold), self.red.intersect(frame, colorThreshold)
 
     # bounding box of gate
     def bbox(self, margin = 0):
-        if red is None or green is None:
+        if self.red is None or self.green is None:
             return None
         x0 = min(self.red.x0, self.red.x1, self.green.x0, self.green.x1)
         x1 = max(self.red.x0, self.red.x1, self.green.x0, self.green.x1)
