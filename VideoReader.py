@@ -109,6 +109,9 @@ class VideoReader:
                 if not self.cap.set(cv2.cv.CV_CAP_PROP_FPS, _frameRate):
                     print "Failed to force framerate"
                     # TODO : look a v4l compilation options to enable fps set ?
+#             self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
+#             self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 200)
+
         else:
             self.frameRate = self.cap.get(cv2.cv.CV_CAP_PROP_FPS)
             if self.frameRate <= 0:
@@ -172,7 +175,8 @@ class VideoReader:
             else:
                 step, isNew = self.history.forward()
 
-            cv2.imshow("raw", step['input'])
+            if self.showInput:
+                cv2.imshow("raw", step['input'])
 
             if isNew:
                 step['output'] = step['input'].copy()
@@ -192,7 +196,8 @@ class VideoReader:
                 if self.outputFrameCallback is not None:
                     self.outputFrameCallback(self, index, step)
 
-            cv2.imshow("output", step['output'])
+            if self.showOutput:
+                cv2.imshow("output", step['output'])
 
         # at end of video input => output last frames in history
         if len(self.history.buffer) != 0 and self.popCallback is not None:
@@ -232,6 +237,8 @@ if __name__ == '__main__':
         print "popped frame", stepNumber
 
     parser = argparse.ArgumentParser()
+    # TODO : -c camera , with camera =  0, 1, ... or picam (=> use picamera module instead ?)
+
     parser.add_argument('-i', '--input', dest = 'inputFile',
                         default = 0,
                         help = "input file path (default to camera)")
@@ -256,8 +263,8 @@ if __name__ == '__main__':
          _infoCallback = infoCallback,
          _popCallback = popCallback,
          _outputFrameCallback = outputFrameCallback,
-         _showinput = args.showinput,
-         _showoutput = args.showoutput,
+         _showInput = args.showinput,
+         _showOutput = args.showoutput,
          _skip = args.skip,
          _frameRate = args.framerate
     )
