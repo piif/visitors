@@ -172,12 +172,9 @@ class VideoReader:
     
                 if self.stepByStep:
                     kc = self.keys.read(True)
-    #                 k = cv2.waitKey(0)
                 else:
                     kc = self.keys.read()
-    #                 k = cv2.waitKey(1)
     
-    #             kc = chr(k & 0xFF)
                 if kc == 'i':
                     print "Frame {0}".format(self.history.index())
                     if self.detailsCallback is not None:
@@ -190,7 +187,6 @@ class VideoReader:
                     continue
     
                 # left key => go backward
-    #             elif k == 1113937:
                 elif kc == 'LEFT':
                     step = self.history.backward()
                     if step is None:
