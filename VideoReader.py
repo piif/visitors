@@ -5,7 +5,18 @@ import argparse
 from History import History
 from time import time
 
-import keys
+def translateKey(k):
+    if k == -1:
+        return None
+    if k == 1113937:
+        return 'LEFT'
+    if k == 1113939:
+        return 'RIGHT'
+    if k == 1113938:
+        return 'UP'
+    if k == 1113940:
+        return 'DOWN'
+    return chr(k & 255)
 
 class VideoReader:
     # max len of buffer # TODO : add argument
@@ -104,6 +115,7 @@ class VideoReader:
 
         self.width = step['input'].shape[1]
         self.height = step['input'].shape[0]
+        self.nbPixel = self.width * self.height
 
 
         if type(self.inputFile) is int:
@@ -164,24 +176,36 @@ class VideoReader:
 
     def run(self):
         try:
-            self.keys = keys.single_keypress()
+            if not self.showOutput and not self.showInput:
+                import keys
+                self.keys = keys.single_keypress()
     
             # read frames
             while(True):
                 isNew = False
     
-                if self.stepByStep:
-                    kc = self.keys.read(True)
+                if self.showOutput or self.showInput:
+                    # force redraw + handle keys
+                    if self.stepByStep:
+                        kc = translateKey(cv2.waitKey(0))
+                    else:
+                        kc = translateKey(cv2.waitKey(1))
                 else:
-                    kc = self.keys.read()
+                    # no window -> use stdin
+                    if self.stepByStep:
+                        kc = self.keys.read(True)
+                    else:
+                        kc = self.keys.read()
     
                 if kc == 'i':
                     print "Frame {0}".format(self.history.index())
                     if self.detailsCallback is not None:
                         print "  ", self.detailsCallback(self, index, step)
                     continue
+
                 elif kc == 'q':
                     break
+
                 elif kc == 's' or kc == 'p':
                     self.stepByStep = not self.stepByStep
                     continue
@@ -218,11 +242,8 @@ class VideoReader:
     
                 if self.showOutput:
                     cv2.imshow("output", step['output'])
-    
-                if self.showOutput or self.showInput:
-                    # force redraw
-                    k = cv2.waitKey(1)
-    
+
+   
             # We're at end of video input => force output of last frames in history
             if len(self.history.buffer) != 0 and self.popCallback is not None:
                 print "popping queue {1} frames from {0}".format(self.history.iter0, len(self.history.buffer))
@@ -232,18 +253,78 @@ class VideoReader:
                     pass
 
         finally:
-            self.keys.stop()
+            if not self.showOutput and not self.showInput:
+                self.keys.stop()
 
     def innerPopCallback(self, stepNumber, step):
         if self.popCallback is not None:
             self.popCallback(self, stepNumber, step)
 
 
+
 # default class defining user callbacks
-class moduleClass:
-    def __init__(self, args):
-        self.outputFile = args.outputFile
+class VideoReaderProgram:
+    def __init__(self):
+        self.parser = argparse.ArgumentParser()
+        self.parser.add_argument('-i', '--input', dest = 'inputFile',
+                            default = None,
+                            help = "input file path (default to None)")
+        self.parser.add_argument('-c', '--camera', type = int, dest = 'inputCam',
+                            default = 0,
+                            help = "input camera number (default to 0)")
+        self.parser.add_argument('-o', '--output', dest = 'outputFile',
+                            default = None,
+                            help = "output file path (default to input + '_out')")
+        self.parser.add_argument('-s', '--skip', type = int, dest = 'skip',
+                            default = 0,
+                            help = "number of frame to skip at start")
+        self.parser.add_argument('-f', '--framerate', type = float, dest = 'framerate',
+                            default = None,
+                            help = "force input and output framerate")
+        self.parser.add_argument('-a', '--autorate', dest = 'autorate',
+                            default = False, action='store_true',
+                            help = "compute framerate from input (for cam only)")
+        self.parser.add_argument('-I', '--hideinput', dest = 'showinput',
+                            default = True, action='store_false',
+                            help = "don't display input window")
+        self.parser.add_argument('-O', '--hideoutput', dest = 'showoutput',
+                            default = True, action='store_false',
+                            help = "don't display output window")
+
+
+    def parseArgs(self):
+        self.args = self.parser.parse_args()
     
+        if self.args.inputFile is None:
+            self.args.inputFile = args.inputCam
+    
+        if self.args.outputFile is None:
+            self.args.outputFile = "{}_out".format(self.args.inputFile)
+    
+        if self.args.autorate:
+            self.args.framerate = 'auto'
+
+        self.outputFile = self.args.outputFile
+
+
+    def run(self):
+        print "self is", self
+        capture = VideoReader(
+             _input = self.args.inputFile,
+             _firstFrameCallback = self.firstFrameCallback,
+             _inputFrameCallback = self.inputFrameCallback,
+             _outputFrameCallback = self.outputFrameCallback,
+             _infoCallback = self.infoCallback,
+             _detailsCallback = self.detailsCallback,
+             _popCallback = self.popCallback,
+             _showInput = self.args.showinput,
+             _showOutput = self.args.showoutput,
+             _skip = self.args.skip,
+             _frameRate = self.args.framerate,
+             _stepByStep = False
+        )
+    
+        capture.run()
 
     def firstFrameCallback(self, caller, frame):
         print "open", self.outputFile, "for", caller.width, 'x', caller.height, '@', caller.frameRate
@@ -278,97 +359,13 @@ class moduleClass:
 
 
 if __name__ == '__main__':
+    program = VideoReaderProgram()
 
+    # user programs can't add argument parsing here
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--input', dest = 'inputFile',
-                        default = None,
-                        help = "input file path (default to None)")
-    parser.add_argument('-c', '--camera', type = int, dest = 'inputCam',
-                        default = 0,
-                        help = "input camera number (default to 0)")
-    parser.add_argument('-o', '--output', dest = 'outputFile',
-                        default = None,
-                        help = "output file path (default to input + '_out')")
-    parser.add_argument('-s', '--skip', type = int, dest = 'skip',
-                        default = 0,
-                        help = "number of frame to skip at start")
-    parser.add_argument('-f', '--framerate', type = float, dest = 'framerate',
-                        default = None,
-                        help = "force input and output framerate")
-    parser.add_argument('-a', '--autorate', dest = 'autorate',
-                        default = False, action='store_true',
-                        help = "compute framerate from input (for cam only)")
-    parser.add_argument('-I', '--hideinput', dest = 'showinput',
-                        default = True, action='store_false',
-                        help = "don't display input window")
-    parser.add_argument('-O', '--hideoutput', dest = 'showoutput',
-                        default = True, action='store_false',
-                        help = "don't display output window")
-    parser.add_argument('-m', '--module', dest = 'moduleName',
-                        default = None,
-                        help = "extension module to use (default to None)")
+    program.parseArgs()
 
-    args = parser.parse_args()
-
-    if args.inputFile is None:
-        args.inputFile = args.inputCam
-
-    if args.outputFile is None:
-        args.outputFile = "{}_out".format(args.inputFile)
-
-    if args.autorate:
-        args.framerate = 'auto'
-
-    if args.moduleName is not None:
-        # import module and instantiate object of inner class with same name
-        module = __import__(args.moduleName)
-        moduleObject = (module.__dict__[args.moduleName])(args)
-    else:
-        moduleObject = moduleClass(args)
-
-    def firstFrameCallback(caller, frame):
-        moduleObject.firstFrameCallback(caller, frame)
-
-    def inputFrameCallback(caller, stepNumber, step):
-        moduleObject.inputFrameCallback(caller, stepNumber, step)
-
-    def outputFrameCallback(caller, stepNumber, step):
-        moduleObject.outputFrameCallback(caller, stepNumber, step)
-
-    def infoCallback(caller, stepNumber, step):
-        return moduleObject.infoCallback(caller, stepNumber, step)
-
-    def detailsCallback(caller, stepNumber, step):
-        return moduleObject.detailsCallback(caller, stepNumber, step)
-
-    def popCallback(caller, stepNumber, step):
-        moduleObject.popCallback(caller, stepNumber, step)
-
-
-    capture = VideoReader(
-         _input = args.inputFile,
-         _firstFrameCallback = firstFrameCallback,
-         _inputFrameCallback = inputFrameCallback,
-         _outputFrameCallback = outputFrameCallback,
-         _infoCallback = infoCallback,
-         _detailsCallback = detailsCallback,
-         _popCallback = popCallback,
-         _showInput = args.showinput,
-         _showOutput = args.showoutput,
-         _skip = args.skip,
-         _frameRate = args.framerate,
-         _stepByStep = False
-    )
-
-    # out = cv2.VideoWriter(
-    #         "{}_stab".format(inputFile),
-    #         cv2.cv.CV_FOURCC(*'XVID'), #cap.get(cv2.cv.CV_CAP_PROP_FOURCC),
-    #         25, #cap.get(cv2.cv.CV_CAP_PROP_FPS),
-    #         (capture.width, capture.height)
-    # )
-
-    capture.run()
-
-    moduleObject.endCallback(capture);
-
+    # user programs can't add initialization stuffs here
+    # or override run method to surround code on it
+    program.run()
+    # user programs can't add finalization stuffs here
