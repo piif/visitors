@@ -4,14 +4,12 @@ import cv2, numpy, math
 
 class extractSamplesDiff(VideoReaderProgram):
     sampleNumber = -1
-    sampling = False
+    sampleFrameStart = -1
+    sampleFrameEnd = -1
+    sampling = 0
 
     # ratio of changing pixels to consider it's a movement
     moveThreshold = 0.05
-
-    # threshold kind and level for moving forms detection
-    thresholdKind = cv2.THRESH_BINARY
-    bgThreshold = 50
 
     # how many frame to wait before considering there's no more move
     samplingTolerancy = 10
@@ -35,43 +33,46 @@ class extractSamplesDiff(VideoReaderProgram):
         if step['move'] > self.moveThreshold:
             if self.sampling == 0:
                 self.sampleNumber += 1
-                if program.thresholdKind == 'MOG':
-                    self.refFrame = cv2.BackgroundSubtractorMOG()
-                    self.refFrame.apply(frame)
-                else:
-                    self.refFrame = (caller.history.get(-self.samplingHistory))['input']
+                self.sampleFrameStart = caller.frameNumber - self.samplingHistory
+                print "start sample at", self.sampleFrameStart
+                if self.sampleFrameStart < 0: self.sampleFrameStart = 0
+                # open out file
+                outputFile = "{0}_out{1:04d}".format(self.args.inputFile, self.sampleNumber)
+                print "open", outputFile, "for", caller.width, 'x', caller.height, '@', caller.frameRate
+                self.out = cv2.VideoWriter(
+                        outputFile,
+                        cv2.cv.CV_FOURCC(*'XVID'),
+                        caller.frameRate,
+                        (caller.width, caller.height)
+                )
             self.sampling = self.samplingTolerancy
+
         elif self.sampling > 0:
             self.sampling -= 1
-
-
-        if self.sampling > 0:
-            if program.thresholdKind == 'MOG':
-                img = self.refFrame.apply(frame)
-            else:
-                # diff with first frame
-                img = cv2.absdiff(self.refFrame, frame)
-                #- blur it
-                img = cv2.blur(img, (15,15))
-                #- convert to gray (needed by contour detection)
-                img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-                #- enhance each color
-                ret,img = cv2.threshold(img, self.bgThreshold, 255, self.thresholdKind)
-
-        step['output'] = img
+            if self.sampling == 0:
+                self.sampleFrameStart = -1
+                self.sampleFrameEnd = caller.frameNumber + self.samplingHistory
+                print "stop sample at", self.sampleFrameEnd
 
         self.prevFrame = step['input']
 
     def infoCallback(self, caller, stepNumber, step):
-        return "{0:2.2%} : {1}".format(
-            step['move'], (self.sampleNumber if self.sampling > 0 else "-"))
+        return "{2:05d} : {0:2.2%} {1}".format(
+            step['move'], (self.sampleNumber if self.sampling > 0 else "-"), caller.frameNumber)
 
 
     def popCallback(self, caller, stepNumber, step):
-        pass
+        if (self.sampleFrameStart >= 0 and self.sampleFrameStart <= stepNumber) \
+                or (self.sampleFrameEnd > 0 and stepNumber <= self.sampleFrameEnd):
+            self.out.write(step['output'])
+            if self.sampleFrameEnd == stepNumber and self.sampleFrameStart < 0:
+                self.sampleFrameEnd = -1
+                self.out.release()
+                self.out = None
 
     def endCallback(self, caller):
-        pass
+        if self.out is not None:
+            self.out.release()
 
 if __name__ == '__main__':
     program = extractSamplesDiff()
@@ -80,10 +81,7 @@ if __name__ == '__main__':
                                 help = "threshold (default to 0,5%)")
     program.parser.add_argument('-b', '--bg-threshold', type = int, dest = 'bgThreshold',
                                 default = 50,
-                                help = "threshold (default to 50)")
-    program.parser.add_argument('-k', '--threshold-kind', dest = 'thresholdKind',
-                                default = None,
-                                help = "threshold type to use (default to BINARY)")
+                                help = "threshold (default to 0,5%)")
 
     program.parseArgs()
  
@@ -91,18 +89,5 @@ if __name__ == '__main__':
     program.bgThreshold = program.args.bgThreshold
     GRAY_MIN = numpy.array(3 * [ program.bgThreshold ], numpy.uint8)
     GRAY_MAX = numpy.array(3 * [ 255 ], numpy.uint8)
-
-    if program.args.thresholdKind == 'MOG':
-        program.thresholdKind = 'MOG'
-    if program.args.thresholdKind == 'BINARY':
-        program.thresholdKind = cv2.THRESH_BINARY
-    if program.args.thresholdKind == 'MASK':
-        program.thresholdKind = cv2.THRESH_MASK
-    if program.args.thresholdKind == 'OTSU':
-        program.thresholdKind = cv2.THRESH_OTSU
-    if program.args.thresholdKind == 'TOZERO':
-        program.thresholdKind = cv2.THRESH_TOZERO
-    if program.args.thresholdKind == 'TRUNC':
-        program.thresholdKind = cv2.THRESH_TRUNC
 
     program.run()

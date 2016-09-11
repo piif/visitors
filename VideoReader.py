@@ -8,13 +8,14 @@ from time import time
 def translateKey(k):
     if k == -1:
         return None
-    if k == 1113937:
+    k = k & 0xffff
+    if k == 0xff51:
         return 'LEFT'
-    if k == 1113939:
+    if k == 0xff53:
         return 'RIGHT'
-    if k == 1113938:
+    if k == 0xff52:
         return 'UP'
-    if k == 1113940:
+    if k == 0xff54:
         return 'DOWN'
     return chr(k & 255)
 
@@ -224,21 +225,21 @@ class VideoReader:
     
                 if isNew:
                     step['output'] = step['input'].copy()
-                    index = self.history.index()
+                    self.frameNumber = self.history.index()
     
                     if self.inputFrameCallback is not None:
-                        self.inputFrameCallback(self, index, step)
+                        self.inputFrameCallback(self, self.frameNumber, step)
     
                     if type(self.inputFile) is int:
                         legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.getTimestamp(self.start, time()))
                     else:
-                        legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.frameToTimestamp(index))
+                        legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.frameToTimestamp(self.frameNumber))
                     if self.infoCallback is not None:
-                        legend = legend + ": " + self.infoCallback(self, index, step)
+                        legend = legend + ": " + self.infoCallback(self, self.frameNumber, step)
                     cv2.putText(step['output'], legend, (5, 20), self.font, 0.5, (255,255,255))
     
                     if self.outputFrameCallback is not None:
-                        self.outputFrameCallback(self, index, step)
+                        self.outputFrameCallback(self, self.frameNumber, step)
     
                 if self.showOutput:
                     cv2.imshow("output", step['output'])
