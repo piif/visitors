@@ -61,9 +61,15 @@ class History:
         return None
 
     # return current item
-    def get(self):
+    def get(self, index = None):
         if len(self.buffer) > 0:
-            return self.buffer[self.bufferPos]
+            if index is None:
+                pos = self.bufferPos
+            elif index >= 0:
+                pos = index if index <= self.bufferPos else self.bufferPos
+            else:
+                pos = self.bufferPos + index if self.bufferPos + index >= 0 else 0
+            return self.buffer[pos]
         return None
 
     # return index of current item
