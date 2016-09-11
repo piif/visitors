@@ -16,7 +16,7 @@ inputFile = argv[1]
 
 # resize video (too fit my screen, and reduce cpu work)
 scale = 0.5
-# limit between black (0) and white (255) to convert un BW picture
+# limit between black (0) and white (255) to convert to BW picture
 bgThreshold = 50
 
 # if distance between a point and last position in a path is lower,

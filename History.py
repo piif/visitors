@@ -1,10 +1,9 @@
 """
-TODO :
+Simple fifo to handle "backward" in a flow
 - User must implement a class/hash/list/something and append them to this class
 - Class stores a fixed size fifo of them
 - User can go forward/backward
-A callback can be called for removed item
-A "main loop" allow to run forward/backward
+- A callback can be called for removed item
 """
 
 class History:

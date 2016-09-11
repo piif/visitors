@@ -4,9 +4,9 @@ pre-Processing tools
 VideoReader
 -----
 Simple class to read a capture, play/pause/backward some frames
-This class can be used as main template for other programs 
+This class can be used as main template for other programs
 
-sampleCapture
+extractSamples
 -----
 **TODO**
 Read a file, detect background, split in video extracts containing movements
@@ -35,13 +35,14 @@ TODO : retry with another bg subtractor and better "main loop"
 BackgroundSubtractorMOG
 -----
 First tests with BackgroundSubtractorMOG method to extract background
+Seems to be CPU consuming
 
 lineFilter
 -----
 Another try : detect crossing thru 2 reference lines
 May works fine if people don't collide, but still need work on way to deduce movement direction from various cases
 
-*Gate* : class to handle "2 lines" concept in lineFilter
+ * Gate : class to handle "2 lines" concept in lineFilter
 
 
 other
@@ -49,7 +50,6 @@ other
 
 History
 -----
-**TODO**
 class to keep track of several steps in a program
 
 pedestrians
@@ -59,7 +59,7 @@ Works fine only in front view
 
 flow
 -----
-???
+old test to detect and track polygons
 
 historyTest
 -----

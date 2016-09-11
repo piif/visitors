@@ -1,11 +1,11 @@
-# TODO : add options displayInput and displayOutput
-
 import cv2, numpy, math
 from sys import argv, exit
 from sys import argv, exit
 import argparse
 from History import History
 from time import time
+
+import keys
 
 class VideoReader:
     # max len of buffer # TODO : add argument
@@ -54,9 +54,9 @@ class VideoReader:
                  _maxBuffer = 25, # fifo max size
                  _firstFrameCallback = None, # callback for first read frame
                  _inputFrameCallback = None, # callback for next frames before changing anything
+                 _outputFrameCallback = None, # callback for next frames just before displaying it
                  _infoCallback = None, # callback to get informations to display in legend
                  _detailsCallback = None, # callback to get detailled informations to display when 'i' pressed
-                 _outputFrameCallback = None, # callback for next frames just before displaying it
                  _popCallback = None, # callback when a frame is popped from history
                  _stepByStep = True, # play/pause mode at startup
                  _showInput = True, # show input in a window
@@ -65,15 +65,22 @@ class VideoReader:
                  _frameRate = None # give framerate
     ):
         self.inputFile = _input
-        self.infoCallback  = _infoCallback
-        self.detailsCallback  = _detailsCallback
+        self.bufferMax = _maxBuffer
+
         self.inputFrameCallback = _inputFrameCallback
         self.outputFrameCallback= _outputFrameCallback
+        self.infoCallback  = _infoCallback
+        self.detailsCallback  = _detailsCallback
         self.popCallback = _popCallback
+
         self.stepByStep = _stepByStep
 
         self.showInput = _showInput
+        if (self.showInput):
+            cv2.namedWindow("raw")
         self.showOutput = _showOutput
+        if (self.showOutput):
+            cv2.namedWindow("output")
 
         self.cap = cv2.VideoCapture(self.inputFile)
 
@@ -103,8 +110,19 @@ class VideoReader:
             self.frameRate = None
             self.start = time()
             if _frameRate is None:
-                print "capture from cam should specify framerate"
+                raise Exception("capture from cam must specify framerate")
+
+            elif _frameRate == 'auto':
+                # read some frame to evaluate framerate
+                for f in range(1,50):
+                    ret, frame = self.cap.read()
+                    if not ret:
+                        print "End of capture during framerate calculation ..."
+                        return None
+                self.frameRate = 50 / (time() - self.start)
+
             else:
+                self.frameRate = _frameRate
                 print "force cam to frame rate", _frameRate
                 if not self.cap.set(cv2.cv.CV_CAP_PROP_FPS, _frameRate):
                     print "Failed to force framerate"
@@ -145,128 +163,206 @@ class VideoReader:
 
 
     def run(self):
-        # read frames
-        while(True):
-            isNew = False
-
-            if self.stepByStep:
-                k = cv2.waitKey(0)
-            else:
-                k = cv2.waitKey(1)
-
-            if k & 0xFF == ord('i'):
-                print "Frame {0}".format(self.history.index())
-                if self.detailsCallback is not None:
-                    print "  ", self.detailsCallback(self, index, step)
-                continue
-            elif k & 0xFF == ord('q'):
-                break
-            elif k & 0xFF == ord('s') or k & 0xFF == ord('p'):
-                self.stepByStep = not self.stepByStep
-                continue
-
-            # left key => go backward
-            elif k == 1113937:
-                step = self.history.backward()
-                #TODO: plante si backward a fond puis play
-                if step is None:
-                    continue
-
-            else:
-                step, isNew = self.history.forward()
-
-            if self.showInput:
-                cv2.imshow("raw", step['input'])
-
-            if isNew:
-                step['output'] = step['input'].copy()
-                index = self.history.index()
-
-                if self.inputFrameCallback is not None:
-                    self.inputFrameCallback(self, index, step)
-
-                if self.frameRate is None:
-                    legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.getTimestamp(self.start, time()))
+        try:
+            self.keys = keys.single_keypress()
+    
+            # read frames
+            while(True):
+                isNew = False
+    
+                if self.stepByStep:
+                    kc = self.keys.read(True)
+    #                 k = cv2.waitKey(0)
                 else:
-                    legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.frameToTimestamp(index))
-                if self.infoCallback is not None:
-                    legend = legend + ": " + self.infoCallback(self, index, step)
-                cv2.putText(step['output'], legend, (5, 20), self.font, 0.5, (255,255,255))
+                    kc = self.keys.read()
+    #                 k = cv2.waitKey(1)
+    
+    #             kc = chr(k & 0xFF)
+                if kc == 'i':
+                    print "Frame {0}".format(self.history.index())
+                    if self.detailsCallback is not None:
+                        print "  ", self.detailsCallback(self, index, step)
+                    continue
+                elif kc == 'q':
+                    break
+                elif kc == 's' or kc == 'p':
+                    self.stepByStep = not self.stepByStep
+                    continue
+    
+                # left key => go backward
+    #             elif k == 1113937:
+                elif kc == 'LEFT':
+                    step = self.history.backward()
+                    if step is None:
+                        continue
+    
+                else:
+                    step, isNew = self.history.forward()
+    
+                if self.showInput:
+                    cv2.imshow("raw", step['input'])
+    
+                if isNew:
+                    step['output'] = step['input'].copy()
+                    index = self.history.index()
+    
+                    if self.inputFrameCallback is not None:
+                        self.inputFrameCallback(self, index, step)
+    
+                    if type(self.inputFile) is int:
+                        legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.getTimestamp(self.start, time()))
+                    else:
+                        legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.frameToTimestamp(index))
+                    if self.infoCallback is not None:
+                        legend = legend + ": " + self.infoCallback(self, index, step)
+                    cv2.putText(step['output'], legend, (5, 20), self.font, 0.5, (255,255,255))
+    
+                    if self.outputFrameCallback is not None:
+                        self.outputFrameCallback(self, index, step)
+    
+                if self.showOutput:
+                    cv2.imshow("output", step['output'])
+    
+                if self.showOutput or self.showInput:
+                    # force redraw
+                    k = cv2.waitKey(1)
+    
+            # We're at end of video input => force output of last frames in history
+            if len(self.history.buffer) != 0 and self.popCallback is not None:
+                print "popping queue {1} frames from {0}".format(self.history.iter0, len(self.history.buffer))
+    
+                while self.history.pop() is not None:
+                    # pop() will call its callback -> nothing to do in loop
+                    pass
 
-                if self.outputFrameCallback is not None:
-                    self.outputFrameCallback(self, index, step)
-
-            if self.showOutput:
-                cv2.imshow("output", step['output'])
-
-        # at end of video input => output last frames in history
-        if len(self.history.buffer) != 0 and self.popCallback is not None:
-            print "popping queue {1} frames from n {0}".format(self.history.iter0, len(self.history.buffer))
-
-            while self.history.pop() is not None:
-                pass
-
+        finally:
+            self.keys.stop()
 
     def innerPopCallback(self, stepNumber, step):
         if self.popCallback is not None:
             self.popCallback(self, stepNumber, step)
 
 
-if __name__ == '__main__':
+# default class defining user callbacks
+class moduleClass:
+    def __init__(self, args):
+        self.outputFile = args.outputFile
+    
 
-    def firstFrameCallback(caller, step):
-        # TODO : job to do with first frame (stored in step['input'])
+    def firstFrameCallback(self, caller, frame):
+        print "open", self.outputFile, "for", caller.width, 'x', caller.height, '@', caller.frameRate
+        self.out = cv2.VideoWriter(
+                self.outputFile,
+                cv2.cv.CV_FOURCC(*'XVID'),
+                caller.frameRate,
+                (caller.width, caller.height)
+        )
+
+    def inputFrameCallback(self, caller, stepNumber, step):
+        # TODO
         pass
 
-    def infoCallback(caller, stepNumber, step):
+    def outputFrameCallback(self, caller, stepNumber, step):
+        # TODO
+        pass
+
+    def infoCallback(self, caller, stepNumber, step):
         # TODO : job to do with first frame (stored in step['input'])
         return "TODO"
 
-    def inputFrameCallback(caller, stepNumber, step):
-        # TODO : job to do with input frame (stored in step['input'])
-        # step['output'] is a copy of step['input'] where to store final output
-        pass
+    def detailsCallback(self, caller, stepNumber, step):
+        # TODO
+        return None
 
-    def outputFrameCallback(caller, stepNumber, step):
-        # TODO : job to do on modified frame, with timestamp on it, just before displaying it
-        # out.write(step['output'])
-        pass
+    def popCallback(self, caller, stepNumber, step):
+        self.out.write(step['output'])
 
-    def popCallback(caller, stepNumber, step):
-        # TODO : job to do with first frame (stored in step['input'])
-        print "popped frame", stepNumber
+    def endCallback(self, caller):
+        self.out.release()
+
+
+if __name__ == '__main__':
+
 
     parser = argparse.ArgumentParser()
-    # TODO : -c camera , with camera =  0, 1, ... or picam (=> use picamera module instead ?)
-
     parser.add_argument('-i', '--input', dest = 'inputFile',
+                        default = None,
+                        help = "input file path (default to None)")
+    parser.add_argument('-c', '--camera', type = int, dest = 'inputCam',
                         default = 0,
-                        help = "input file path (default to camera)")
+                        help = "input camera number (default to 0)")
+    parser.add_argument('-o', '--output', dest = 'outputFile',
+                        default = None,
+                        help = "output file path (default to input + '_out')")
     parser.add_argument('-s', '--skip', type = int, dest = 'skip',
                         default = 0,
                         help = "number of frame to skip at start")
-    parser.add_argument('-f', '--framerate', type = int, dest = 'framerate',
+    parser.add_argument('-f', '--framerate', type = float, dest = 'framerate',
                         default = None,
-                        help = "force framerate")
+                        help = "force input and output framerate")
+    parser.add_argument('-a', '--autorate', dest = 'autorate',
+                        default = False, action='store_true',
+                        help = "compute framerate from input (for cam only)")
     parser.add_argument('-I', '--hideinput', dest = 'showinput',
                         default = True, action='store_false',
                         help = "don't display input window")
     parser.add_argument('-O', '--hideoutput', dest = 'showoutput',
                         default = True, action='store_false',
                         help = "don't display output window")
+    parser.add_argument('-m', '--module', dest = 'moduleName',
+                        default = None,
+                        help = "extension module to use (default to None)")
+
     args = parser.parse_args()
+
+    if args.inputFile is None:
+        args.inputFile = args.inputCam
+
+    if args.outputFile is None:
+        args.outputFile = "{}_out".format(args.inputFile)
+
+    if args.autorate:
+        args.framerate = 'auto'
+
+    if args.moduleName is not None:
+        # import module and instantiate object of inner class with same name
+        module = __import__(args.moduleName)
+        moduleObject = (module.__dict__[args.moduleName])(args)
+    else:
+        moduleObject = moduleClass(args)
+
+    def firstFrameCallback(caller, frame):
+        moduleObject.firstFrameCallback(caller, frame)
+
+    def inputFrameCallback(caller, stepNumber, step):
+        moduleObject.inputFrameCallback(caller, stepNumber, step)
+
+    def outputFrameCallback(caller, stepNumber, step):
+        moduleObject.outputFrameCallback(caller, stepNumber, step)
+
+    def infoCallback(caller, stepNumber, step):
+        return moduleObject.infoCallback(caller, stepNumber, step)
+
+    def detailsCallback(caller, stepNumber, step):
+        return moduleObject.detailsCallback(caller, stepNumber, step)
+
+    def popCallback(caller, stepNumber, step):
+        moduleObject.popCallback(caller, stepNumber, step)
+
 
     capture = VideoReader(
          _input = args.inputFile,
          _firstFrameCallback = firstFrameCallback,
          _inputFrameCallback = inputFrameCallback,
-         _infoCallback = infoCallback,
-         _popCallback = popCallback,
          _outputFrameCallback = outputFrameCallback,
+         _infoCallback = infoCallback,
+         _detailsCallback = detailsCallback,
+         _popCallback = popCallback,
          _showInput = args.showinput,
          _showOutput = args.showoutput,
          _skip = args.skip,
-         _frameRate = args.framerate
+         _frameRate = args.framerate,
+         _stepByStep = False
     )
 
     # out = cv2.VideoWriter(
@@ -278,4 +374,5 @@ if __name__ == '__main__':
 
     capture.run()
 
-    #out.release()
+    moduleObject.endCallback(capture);
+
