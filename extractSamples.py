@@ -37,7 +37,10 @@ class extractSamplesDiff(VideoReaderProgram):
                 print "start sample at", self.sampleFrameStart
                 if self.sampleFrameStart < 0: self.sampleFrameStart = 0
                 # open out file
-                outputFile = "{0}_out{1:04d}".format(self.args.inputFile, self.sampleNumber)
+                if (self.args.outputFile.find("{}")):
+                    outputFile = self.args.outputFile.replace("{}", "{0:04d}").format(self.sampleNumber)
+                else:
+                    outputFile = "{0}{1:04d}".format(self.args.outputFile, self.sampleNumber)
                 print "open", outputFile, "for", caller.width, 'x', caller.height, '@', caller.frameRate
                 self.out = cv2.VideoWriter(
                         outputFile,
