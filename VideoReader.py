@@ -26,6 +26,9 @@ class VideoReader:
     # step by step mode # TODO : add argument
     stepByStep = True
 
+    # where to insert legend in output image (to be overloaded by sub classes)
+    legendLine = 1
+
     font = cv2.FONT_HERSHEY_SIMPLEX
 
 
@@ -169,7 +172,7 @@ class VideoReader:
 
         legend = "input '{3}' {0}x{1}@{2}".format(self.width, self.height, self.frameRate, self.inputFile)
         print legend
-        cv2.putText(step['output'], legend, (5, 20), self.font, 0.5, (255,255,255))
+        cv2.putText(step['output'], legend, (5, self.legendLine*20), self.font, 0.5, (255,255,255))
 
         if self.showOutput:
             cv2.imshow("output", step['output'])
@@ -236,8 +239,8 @@ class VideoReader:
                         legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.frameToTimestamp(self.frameNumber))
                     if self.infoCallback is not None:
                         legend = legend + ": " + self.infoCallback(self, self.frameNumber, step)
-                    cv2.putText(step['output'], legend, (5, 20), self.font, 0.5, (255,255,255))
-    
+                    cv2.putText(step['output'], legend, (5, self.legendLine*20), self.font, 0.5, (255,255,255))
+                    print self.legendLine
                     if self.outputFrameCallback is not None:
                         self.outputFrameCallback(self, self.frameNumber, step)
     
@@ -291,6 +294,9 @@ class VideoReaderProgram:
         self.parser.add_argument('-O', '--hideoutput', dest = 'showoutput',
                             default = True, action='store_false',
                             help = "don't display output window")
+        self.parser.add_argument('-p', '--paused', dest = 'paused',
+                            default = False, action='store_true',
+                            help = "start in step by step mode")
 
 
     def parseArgs(self):
@@ -322,7 +328,7 @@ class VideoReaderProgram:
              _showOutput = self.args.showoutput,
              _skip = self.args.skip,
              _frameRate = self.args.framerate,
-             _stepByStep = False
+             _stepByStep = self.args.paused
         )
     
         capture.run()
@@ -353,7 +359,10 @@ class VideoReaderProgram:
         return None
 
     def popCallback(self, caller, stepNumber, step):
-        self.out.write(step['output'])
+        try:
+            self.out.write(step['output'])
+        except AttributeError:
+            pass
 
     def endCallback(self, caller):
         self.out.release()
