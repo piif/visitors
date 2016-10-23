@@ -1,6 +1,10 @@
 Samples available at https://drive.google.com/open?id=0B0YxeBdRV-ruTWNfaS0tZmw0TEk
 
-vidéos prises lors du salon ludinord
+raw/M2U0006*.MPG : ludinord 2016, videos de la porte principale
+raw/WP_20160319_*.mp4 : ludinord 2016, video de la porte de derrière
+portique/portique_*.mp4 : portique de LP3
+
+extraits de la porte principale :
 
 ldn1_14_3.avi (14 personnes entrent, 3 sortent) :
 - frame 340 : 2 personnes se croisent
