@@ -101,7 +101,7 @@ class Line:
 
 
     def __str__(self):
-        return "%s line @ (%d,%d)->(%d,%d) -> maxLen %d" % (
+        return "--%s %d %d %d %d -> maxLen %d" % (
             self.name, self.x0, self.y0, self.x1, self.y1, self.maxLen)
 
 
@@ -132,6 +132,7 @@ class CountingGate:
 
 
     def setBackground(self, frame):
+        self.background = frame
         self.green.setBackground(frame)
         self.red.setBackground(frame)
 
