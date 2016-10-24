@@ -223,6 +223,9 @@ class VideoReader:
                 else:
                     step, isNew = self.history.forward()
     
+                if step is None:
+                    break;
+
                 if self.showInput:
                     cv2.imshow("raw", step['input'])
     
@@ -240,7 +243,6 @@ class VideoReader:
                     if self.infoCallback is not None:
                         legend = legend + ": " + self.infoCallback(self, self.frameNumber, step)
                     cv2.putText(step['output'], legend, (5, self.legendLine*20), self.font, 0.5, (255,255,255))
-                    print self.legendLine
                     if self.outputFrameCallback is not None:
                         self.outputFrameCallback(self, self.frameNumber, step)
     

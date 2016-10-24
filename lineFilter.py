@@ -52,8 +52,7 @@ class lineFilter(VideoReaderProgram):
     greenRate = 0
     redRate = 0
 
-    # any color of any pixel varying of more than this value is considered
-    # has covering background
+    # any color of any pixel varying of more than this value is considered as covering background
     colorThreshold = 50 # TODO : add argument
 
 
@@ -63,7 +62,7 @@ class lineFilter(VideoReaderProgram):
 
 
     def firstFrameCallback(self, caller, frame):
-        self.gate.setBackground(frame)
+        self.gate.setBackground(frame.copy())
         self.gate.redraw(frame)
         caller.legendLine = 2
 

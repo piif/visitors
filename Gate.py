@@ -122,7 +122,7 @@ class CountingGate:
 
 
     def setRed(self, _red):
-        self.red = -red
+        self.red = _red
         self.width = max(len(self.red), len(self.green))
 
 
