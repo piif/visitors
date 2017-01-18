@@ -31,10 +31,11 @@ class History:
     def pop(self):
         if len(self.buffer) == 0:
             return None
+        result = self.buffer.pop(0)
         if self.removeCallback is not None:
-            self.removeCallback(self.iter0, self.buffer[0])
+            self.removeCallback(self.iter0, result)
         self.iter0 += 1
-        return self.buffer.pop(0)
+        return result
 
     def forward(self):
         if self.bufferPos >= 0 and self.bufferPos < len(self.buffer) - 1:

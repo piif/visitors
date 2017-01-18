@@ -3,7 +3,7 @@ from sys import argv, exit
 from sys import argv, exit
 import argparse
 from History import History
-from time import time
+from time import time, sleep
 
 def translateKey(k):
     if k == -1:
@@ -33,10 +33,26 @@ class VideoReader:
 
 
     def getNextFrame(self):
+        if self.softwareFrameRate:
+            # have to wait to next frame tick
+            shouldBeNum = self.frameNumber + 1
+            shouldBeAt = float(shouldBeNum) / self.frameRate + self.start
+            now = time()
+            if now > shouldBeAt:
+                lost = int(math.floor((now - shouldBeAt) * self.frameRate));
+                shouldBeNum += lost + 1
+                shouldBeAt = shouldBeNum / self.frameRate + self.start
+            else:
+                lost = 0
+                if shouldBeAt != now:
+                    sleep(shouldBeAt - now)
+
         ret, frame = self.cap.read()
+        if self.softwareFrameRate and lost > 0:
+            print shouldBeNum, ": skipped", lost, "frames (", now, "/", shouldBeAt, ")"
         if not ret:
             return None
-        return { "input": frame }
+        return { "input": frame, "frameNumber": shouldBeNum }
 
 
     def showInfo(self):
@@ -73,6 +89,7 @@ class VideoReader:
                  _infoCallback = None, # callback to get informations to display in legend
                  _detailsCallback = None, # callback to get detailled informations to display when 'i' pressed
                  _popCallback = None, # callback when a frame is popped from history
+                 _endCallback = None, # callback before exiting run()
                  _stepByStep = True, # play/pause mode at startup
                  _showInput = True, # show input in a window
                  _showOutput = True, # show output in a window
@@ -87,6 +104,7 @@ class VideoReader:
         self.infoCallback  = _infoCallback
         self.detailsCallback  = _detailsCallback
         self.popCallback = _popCallback
+        self.endCallback = _endCallback
 
         self.stepByStep = _stepByStep
 
@@ -111,7 +129,8 @@ class VideoReader:
         if not ret:
             exit(1)
 
-        self.history = History(_next = self.getNextFrame, _first = { "input": frame },
+        self.frameNumber = 0
+        self.history = History(_next = self.getNextFrame, _first = { "input": frame, "frameNumber": 0 },
                           _maxSize = _maxBuffer, _initialIndex = _skip,
                           _removeCallback = self.innerPopCallback)
 
@@ -135,14 +154,20 @@ class VideoReader:
                     if not ret:
                         print "End of capture during framerate calculation ..."
                         return None
-                self.frameRate = 50 / (time() - self.start)
+                # force to 10% less, and rond to integer
+                self.frameRate = int( 50 / (time() - self.start) * 0.9 )
+                print "cam frame rate evaluated to", self.frameRate
 
             else:
                 self.frameRate = _frameRate
-                print "force cam to frame rate", _frameRate
-                if not self.cap.set(cv2.cv.CV_CAP_PROP_FPS, _frameRate):
-                    print "Failed to force framerate"
-                    # TODO : look a v4l compilation options to enable fps set ?
+
+            print "Force cam to frame rate", self.frameRate
+            if not self.cap.set(cv2.cv.CV_CAP_PROP_FPS, self.frameRate):
+                print "Failed to force cam to framerate, will try by software"
+                self.softwareFrameRate = True
+            else:
+                self.softwareFrameRate = False
+                # TODO : look a v4l compilation options to enable fps set ?
 #             self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
 #             self.cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 200)
 
@@ -183,11 +208,11 @@ class VideoReader:
             if not self.showOutput and not self.showInput:
                 import keys
                 self.keys = keys.single_keypress()
-    
+
             # read frames
             while(True):
                 isNew = False
-    
+
                 if self.showOutput or self.showInput:
                     # force redraw + handle keys
                     if self.stepByStep:
@@ -222,20 +247,20 @@ class VideoReader:
     
                 else:
                     step, isNew = self.history.forward()
-    
+
                 if step is None:
                     break;
 
                 if self.showInput:
                     cv2.imshow("raw", step['input'])
-    
+
                 if isNew:
                     step['output'] = step['input'].copy()
-                    self.frameNumber = self.history.index()
-    
+                    self.frameNumber = step['frameNumber']
+
                     if self.inputFrameCallback is not None:
                         self.inputFrameCallback(self, self.frameNumber, step)
-    
+
                     if type(self.inputFile) is int:
                         legend = "{0:02}:{1:02}:{2:02}.{3:02}".format(*self.getTimestamp(self.start, time()))
                     else:
@@ -245,11 +270,11 @@ class VideoReader:
                     cv2.putText(step['output'], legend, (5, self.legendLine*20), self.font, 0.5, (255,255,255))
                     if self.outputFrameCallback is not None:
                         self.outputFrameCallback(self, self.frameNumber, step)
-    
+
                 if self.showOutput:
                     cv2.imshow("output", step['output'])
 
-   
+
             # We're at end of video input => force output of last frames in history
             if len(self.history.buffer) != 0 and self.popCallback is not None:
                 print "popping queue {1} frames from {0}".format(self.history.iter0, len(self.history.buffer))
@@ -259,6 +284,9 @@ class VideoReader:
                     pass
 
         finally:
+            if self.endCallback is not None:
+                self.endCallback(self, self.frameNumber)
+
             if not self.showOutput and not self.showInput:
                 self.keys.stop()
 
@@ -305,7 +333,7 @@ class VideoReaderProgram:
         self.args = self.parser.parse_args()
     
         if self.args.inputFile is None:
-            self.args.inputFile = args.inputCam
+            self.args.inputFile = self.args.inputCam
     
         if self.args.outputFile is None:
             self.args.outputFile = "{}_out".format(self.args.inputFile)
@@ -326,6 +354,7 @@ class VideoReaderProgram:
              _infoCallback = self.infoCallback,
              _detailsCallback = self.detailsCallback,
              _popCallback = self.popCallback,
+             _endCallback = self.endCallback,
              _showInput = self.args.showinput,
              _showOutput = self.args.showoutput,
              _skip = self.args.skip,
@@ -362,11 +391,15 @@ class VideoReaderProgram:
 
     def popCallback(self, caller, stepNumber, step):
         try:
+            print "pop", step['frameNumber']
             self.out.write(step['output'])
         except AttributeError:
+            print "exception ?"
             pass
 
-    def endCallback(self, caller):
+    def endCallback(self, caller, lastStepNumber):
+        print "Exiting after", lastStepNumber, "frames"
+        sleep(1) # ugly, but else output file is truncated ...
         self.out.release()
 
 
